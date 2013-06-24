@@ -2,24 +2,24 @@ $global:START_TIME = Get-Date
 $global:END_TIME = Get-Date
 
 $global:TierI = ""
-$global:TierII = "g2-production-sas-raid5"
-$global:TierIII = "g2-production-sata-raid6"
+$global:TierII = "your-storage-here"
+$global:TierIII = "your-storage-here"
 
 $global:PRIMARY_DATASTORE = $global:TierIII
 $global:SECONDARY_DATASTORE = ""
 $global:SECOND_DISK_SIZE = "50"
 
-$global:IP_ADDR = "10.10.10.10" # IP Address
+$global:IP_ADDR = "" # IP Address
 $global:SNM = "255.255.255.0" # Subnet Mask
-$global:DFG = "10.10.10.1" # Default Gateway
-$global:DNS1 = "10.10.10.254"
-$global:DNS2 = "10.10.10.253"
-$global:TEMPLATE = "Windows2008R2"
-$global:SERVER_NAME = "WindowsServer2008R2-001" 
-$global:PORTGROUP = "vlan2001"
+$global:DFG = "" # Default Gateway
+$global:DNS1 = ""
+$global:DNS2 = ""
+$global:TEMPLATE = "your-template-here"
+$global:SERVER_NAME = "your-name-here" 
+$global:PORTGROUP = "your-portgroup-here"
 $global:OS_SPEC = ""
-$global:OS_SPEC_NAME = "Windows2008R2Base"
-$global:SMTP_RELAY = "205.145.143.169"
+$global:OS_SPEC_NAME = "your-osspec-here"
+$global:SMTP_RELAY = "your-smtp-relay-here"
 $global:VERIFY_RESULTS = "N"
 $global:SECOND_DISK = "N"
 $global:NEW_LINE = "`r`n" 
@@ -38,8 +38,8 @@ $global:BUILDER_NAME = ""
 $global:BUILDER_EMAIL = ""
 
 $global:OS_TYPE = ""
-$global:DNS_SUFFIX = "onlinetech"
-$global:DNS_SERVER = "onlinetech"
+$global:DNS_SUFFIX = "your-fqdn-here"
+$global:DNS_SERVER = "your-fqdn-here"
 
 ############################### GATHER CLIENT INFO ############################### 
 function UserInfo{
@@ -93,12 +93,12 @@ function GeneralSettings{
     
     if($global:OS_TYPE.ToLower() -eq "w"){
         $global:OS_TYPE = "WINDOWS"
-        $global:TEMPLATE = "windows-2008-r2-template"
-        $global:OS_SPEC_NAME = "windows-2008-r2-customization"
+        $global:TEMPLATE = "your-template-here"
+        $global:OS_SPEC_NAME = "your-osspec-here"
     }elseif($global:OS_TYPE.ToLower() -eq "l"){
         $global:OS_TYPE = "LINUX"
-        $global:TEMPLATE = "centos-6-template"
-        $global:OS_SPEC_NAME = "centos-6-customization" 
+        $global:TEMPLATE = "your-template-here"
+        $global:OS_SPEC_NAME = "your-osspec-here" 
         
         $global:DNS_SUFFIX = Read-Host "What is the domain name of the customer"
         $global:DNS_SUFFIX = $global:DNS_SUFFIX.ToLower()
@@ -133,8 +133,8 @@ function ConfigureNIC{
 }
 
 function ConfigureStorage{
-    $global:PRIMARY_DATASTORE = "g2-production-sata-raid6"
-    $global:SECONDARY_DATASTORE = "g2-production-sas-raid5"
+    $global:PRIMARY_DATASTORE = "your-storage-here"
+    $global:SECONDARY_DATASTORE = "your-storage-here"
     $global:SECOND_DISK_SIZE = 50
     $global:SECOND_DISK = "N"
 
@@ -271,7 +271,7 @@ function ExecuteBuild{
     Write-Host ""
     #Add-PSSnapin VMware.VimAutomation.Core
     Connect-VIServer 10.200.10.30 
-    $global:DEPLOYMENT_CLUSTER = Get-Cluster -Name "g2-enterprise"
+    $global:DEPLOYMENT_CLUSTER = Get-Cluster -Name "your-cluster-here"
     VerifyResourcePool
     [decimal]$global:SERVER_MEMORY = $global:SERVER_MEMORY
     
@@ -340,7 +340,7 @@ function SendReport{
     Write-Host "********** E-Mailing Build Report **********"
     Write-Host ""
     $SUBJECT = "Build report for server " +  $global:SERVER_NAME
-    Send-MailMessage -To "saiello@onlinetech.com" -Cc $global:BUILDER_EMAIL -From "build_report@onlinetech.com" -Subject $SUBJECT -SmtpServer $global:SMTP_RELAY -Body $REPORT_CONTENT
+    Send-MailMessage -To "your-email-here" -Cc $global:BUILDER_EMAIL -From "your-email-here" -Subject $SUBJECT -SmtpServer $global:SMTP_RELAY -Body $REPORT_CONTENT
 }
 
 ############################### START MAIN PROGRAM ############################### 
