@@ -1,0 +1,365 @@
+$global:START_TIME = Get-Date
+$global:END_TIME = Get-Date
+
+$global:TierI = ""
+$global:TierII = "g2-production-sas-raid5"
+$global:TierIII = "g2-production-sata-raid6"
+
+$global:PRIMARY_DATASTORE = $global:TierIII
+$global:SECONDARY_DATASTORE = ""
+$global:SECOND_DISK_SIZE = "50"
+
+$global:IP_ADDR = "10.10.10.10" # IP Address
+$global:SNM = "255.255.255.0" # Subnet Mask
+$global:DFG = "10.10.10.1" # Default Gateway
+$global:DNS1 = "10.10.10.254"
+$global:DNS2 = "10.10.10.253"
+$global:TEMPLATE = "Windows2008R2"
+$global:SERVER_NAME = "WindowsServer2008R2-001" 
+$global:PORTGROUP = "vlan2001"
+$global:OS_SPEC = ""
+$global:OS_SPEC_NAME = "Windows2008R2Base"
+$global:SMTP_RELAY = "205.145.143.169"
+$global:VERIFY_RESULTS = "N"
+$global:SECOND_DISK = "N"
+$global:NEW_LINE = "`r`n" 
+$global:OS_HARD_DISK_OBJ = ""
+$global:OS_HARD_DISK_SIZE = "50"
+$global:OS_HARD_DISK_RESIZE = "NO"
+$global:TOTAL_DISK_SIZE = 0
+
+$global:CLIENT_ID = ""
+$global:CLIENT_NAME = ""
+$global:RESOURCE_POOL = ""
+$global:CURRENT_RESOURCE_POOL = ""
+$global:SERVER_MEMORY = 2
+$global:CPU_COUNT = 1
+$global:BUILDER_NAME = ""
+$global:BUILDER_EMAIL = ""
+
+$global:OS_TYPE = ""
+$global:DNS_SUFFIX = "onlinetech"
+$global:DNS_SERVER = "onlinetech"
+
+############################### GATHER CLIENT INFO ############################### 
+function UserInfo{
+    Write-Host "********** Setting User Configuration **********"
+    Write-Host ""
+    $global:BUILDER_NAME = Read-Host "Please enter your full name"
+    $global:BUILDER_EMAIL = Read-Host "Please enter your Online Tech e-mail address to be mailed a copy of youre build report"
+    Write-Host ""
+}
+
+##################################################################################
+
+############################### GATHER CLIENT INFO ############################### 
+function ClientInfo{
+    Write-Host "********** Starting Client Configuration **********"
+    Write-Host ""
+    $global:CLIENT_ID = Read-Host "Enter the client ID"
+    $global:CLIENT_NAME = Read-Host "Enter the client name (all lower case no spaces)"
+    $global:CLIENT_NAME = $global:CLIENT_NAME.Replace(' ','')
+    $global:CLIENT_NAME = $global:CLIENT_NAME.ToLower()
+    $global:RESOURCE_POOL = "$global:CLIENT_ID-$global:CLIENT_NAME"
+    Write-Host ""
+}
+##################################################################################
+
+############################### GATHER SERVER INFO ############################### 
+function VerifyResourcePool{
+    #Connect-VIServer 10.200.10.30 
+    Write-Host "********** Checking Resource Pool Availability **********"
+    $global:CURRENT_RESOURCE_POOL = Get-ResourcePool | WHERE {$_.Name -eq $global:RESOURCE_POOL}
+    Write-Host $global:CURRENT_RESOURCE_POOL.Name
+    
+    if($global:CURRENT_RESOURCE_POOL.Name -eq $global:RESOURCE_POOL){
+        Write-Host "Resource pool exists"
+    }else{
+        Write-Host "Resource pool does not exist, creating resource pool $global:RESOURCE_POOL"
+        New-ResourcePool -Location $global:DEPLOYMENT_CLUSTER -Name $global:RESOURCE_POOL
+    }
+    
+}
+
+##################################################################################
+
+############################### GATHER SERVER INFO ############################### 
+function GeneralSettings{
+    Write-Host "********** Starting General Configuration **********"
+    Write-Host ""
+    
+    Write-Host "Is this a Windows or Linux build"
+    $global:OS_TYPE = Read-Host "'W' for Windows / 'L' for Linux all other input will terminate the script"
+    
+    if($global:OS_TYPE.ToLower() -eq "w"){
+        $global:OS_TYPE = "WINDOWS"
+        $global:TEMPLATE = "windows-2008-r2-template"
+        $global:OS_SPEC_NAME = "windows-2008-r2-customization"
+    }elseif($global:OS_TYPE.ToLower() -eq "l"){
+        $global:OS_TYPE = "LINUX"
+        $global:TEMPLATE = "centos-6-template"
+        $global:OS_SPEC_NAME = "centos-6-customization" 
+        
+        $global:DNS_SUFFIX = Read-Host "What is the domain name of the customer"
+        $global:DNS_SUFFIX = $global:DNS_SUFFIX.ToLower()
+        $global:DNS_SUFFIX = $global:DNS_SUFFIX.Replace(' ','')
+        $global:DNS_SERVER = $global:DNS_SUFFIX
+               
+    }else{
+        Write-Host "You did not enter in 'W' or 'L' terminating installation"
+        break
+    }
+    
+    
+    $global:SERVER_NAME = Read-Host "What would you like the name of your new server to be"
+    $global:PORTGROUP = Read-Host "Enter the portgroup for the server (example: vlan2001)"
+    $global:SERVER_MEMORY = Read-Host "Enter the amount of memory in GB the server will have"
+    $global:CPU_COUNT = Read-Host "Enter the amount of CPUs the server will have"
+    Write-Host ""
+}
+##################################################################################
+
+function ConfigureNIC{
+    Write-Host "********** Starting General Configuration **********"
+    Write-Host ""
+    
+    $global:IP_ADDR = Read-Host "Enter the IP address of the server"
+    $global:SNM =  Read-Host "Enter the subnet mask of the server"
+    $global:DFG = Read-Host "Enter the default gateway of the server"
+    $global:DNS1 = Read-Host "Enter the IP address of the first DNS server"
+    $global:DNS2 = Read-Host "Enter the IP address of the second DNS server"
+    
+    Write-Host ""
+}
+
+function ConfigureStorage{
+    $global:PRIMARY_DATASTORE = "g2-production-sata-raid6"
+    $global:SECONDARY_DATASTORE = "g2-production-sas-raid5"
+    $global:SECOND_DISK_SIZE = 50
+    $global:SECOND_DISK = "N"
+
+    Write-Host "********** Starting Storage Configuration **********"
+    Write-Host ""
+
+    Write-Host "Select the storage type the primary (OS) drive should be on:"
+    Write-Host "SATA [1]"
+    Write-Host " SAS [2]"
+    $PRIMARY = Read-Host "Select [1 or 2] all other values will be disgarded and SATA will be default"
+    Write-Host ""
+
+    if($PRIMARY -eq 1){
+    $global:PRIMARY_DATASTORE = $global:TierIII
+    }elseif($PRIMARY -eq 2){
+    $global:PRIMARY_DATASTORE = $global:TierII
+    }else{
+    Write-Host "You didn't enter a correct value, SATA will be selected as default"
+    $global:PRIMARY_DATASTORE = $global:TierIII
+    Write-Host ""
+    }
+    
+    $global:OS_HARD_DISK_RESIZE = Read-Host "Resize OS drive? ('Y' to resize all other input for no resize)"    
+    
+    if($global:OS_HARD_DISK_RESIZE -eq "y" -or $global:OS_HARD_DISK_RESIZE -eq "Y"){
+        $global:OS_HARD_DISK_SIZE = Read-Host "Enter size of the primary OS drive in 50Gb increments"
+        Write-Host ""
+    }
+    
+    if($global:OS_HARD_DISK_SIZE -ne "50"){
+       if([int]$global:OS_HARD_DISK_SIZE -lt [int]50){
+            Write-Host ""
+            Write-Host "******************************* ERROR DETECTED *******************************************"
+            Write-Host "You entered a value " $global:OS_HARD_DISK_SIZE " which is less than 50. The hard disk will be 50Gb in size"
+            Write-Host ""
+            $global:OS_HARD_DISK_SIZE = 50
+        }elseif([int]$global:OS_HARD_DISK_SIZE -gt [int]950){
+            Write-Host ""
+            Write-Host "******************************* ERROR DETECTED *******************************************"
+            Write-Host "You entered a value greater than 950Gb, 50Gb will be used"
+            Write-Host ""
+            $global:OS_HARD_DISK_SIZE = 50
+        }elseif(([int]$global:OS_HARD_DISK_SIZE % 50) -ne 0){
+            Write-Host ""
+            Write-Host "******************************* ERROR DETECTED *******************************************"
+            Write-Host "You entered a value that is not a multipule of 50, second disk will be sized at 50Gb"
+            Write-Host ""
+            $global:OS_HARD_DISK_SIZE = 50    
+        }
+    }
+
+Write-Host "A second hard drive is only needed is a customer wants two different drive types"
+$global:SECOND_DISK = Read-Host "Does this server require a second hard drive? (Y/N)"
+Write-Host ""
+
+    if($global:SECOND_DISK -eq "y" -or $global:SECOND_DISK -eq "Y"){
+        $global:SECOND_DISK = "YES"
+    } 
+
+    if($global:SECOND_DISK -eq "YES"){
+        if($global:PRIMARY_DATASTORE -eq $global:TierIII){
+            $global:SECONDARY_DATASTORE = $global:TierII
+        }elseif($global:PRIMARY_DATASTORE -eq $global:TierII){
+            $global:SECONDARY_DATASTORE = $global:TierIII
+        }else{
+            Write-Host "There was an error assigning a second drive type, SATA will be used"
+            $global:SECONDARY_DATASTORE = $global:TierIII
+            Write-Host ""
+        }
+    
+    $global:SECOND_DISK_SIZE = Read-Host "Enter size of second hard drive in Gb: "
+    
+        if([int]$global:SECOND_DISK_SIZE -lt [int]50){
+            Write-Host ""
+            Write-Host "******************************* ERROR DETECTED *******************************************"
+            Write-Host "You entered a value " $global:SECOND_DISK_SIZE " which is less than 50. The hard disk will be 50Gb in size"
+            Write-Host ""
+            $global:SECOND_DISK_SIZE = 50
+        }elseif([int]$global:SECOND_DISK_SIZE -gt [int]950){
+            Write-Host ""
+            Write-Host "******************************* ERROR DETECTED *******************************************"
+            Write-Host "You entered a value greater than 950Gb, 50Gb will be used"
+            Write-Host ""
+            $global:SECOND_DISK_SIZE = 50
+        }elseif(([int]$global:SECOND_DISK_SIZE % [int]50) -ne [int]0){
+            Write-Host ""
+            Write-Host "******************************* ERROR DETECTED *******************************************"
+            Write-Host "You entered a value that is not a multipule of 50, second disk will be sized at 50Gb"
+            Write-Host ""
+            $global:SECOND_DISK_SIZE = 50    
+        }
+    }
+    
+    [int]$global:TOTAL_DISK_SIZE = [int]$global:OS_HARD_DISK_SIZE + [int]$global:SECOND_DISK_SIZE
+    
+    if($global:TOTAL_DISK_SIZE -gt 1000){
+        Write-Host "You have tried to make a VM that's over 1TB in size, exiting setup"
+        Write-Host ""
+        break
+    }
+}
+
+function VerifyResults{
+    Write-Host ""
+    Write-Host "********** Verify Build Configuration **********"
+    Write-Host ""
+    Write-Host "Resource Pool: "$global:RESOURCE_POOL
+    Write-Host "Template Used: "$global:TEMPLATE
+    Write-Host "Customization Spec Used: "$global:OS_SPEC_NAME
+    Write-Host "Server name: "$global:SERVER_NAME
+    Write-Host "Memory allocated: "$global:SERVER_MEMORY "Gb"
+    Write-Host "CPUs allocated: "$global:CPU_COUNT 
+    Write-Host "Server portgroup: "$global:PORTGROUP
+    Write-Host "IP Address: "$global:IP_ADDR
+    Write-Host "Subnet Mask: "$global:SNM
+    Write-Host "Default gateway: "$global:DFG
+    Write-Host "Primary DNS server: "$global:DNS1
+    Write-Host "Secondary DNS server: "$global:DNS2
+    Write-Host "The primary storage will be placed on: "$global:PRIMARY_DATASTORE
+    Write-Host "The primary storage size will be: "$global:OS_HARD_DISK_SIZE "Gb"
+    Write-Host "Second disk requested: $global:SECOND_DISK"
+
+    if($global:SECOND_DISK -eq "YES"){
+        Write-Host "The secondary storage will be placed on: "$global:SECONDARY_DATASTORE
+        Write-Host "The size of the second hard drive will be: "$global:SECOND_DISK_SIZE "Gb"
+    }
+    Write-Host ""
+    $global:VERIFY_RESULTS = Read-Host "Is this information correct? (Y/N) "
+}
+
+function ExecuteBuild{
+
+    Write-Host "********** Starting Build Execution **********"
+    Write-Host ""
+    #Add-PSSnapin VMware.VimAutomation.Core
+    Connect-VIServer 10.200.10.30 
+    $global:DEPLOYMENT_CLUSTER = Get-Cluster -Name "g2-enterprise"
+    VerifyResourcePool
+    [decimal]$global:SERVER_MEMORY = $global:SERVER_MEMORY
+    
+    Write-Host ""
+    Write-Host "GLobal OS Type is:" $global:OS_TYPE
+    Write-Host ""
+    
+    sleep -s 3
+    
+    if($global:OS_TYPE -eq "WINDOWS"){
+    Set-OSCustomizationSpec -OSCustomizationSpec $global:OS_SPEC_NAME -TimeZone 255 -AutoLogonCount 2 
+    Set-OSCustomizationSpec -OSCustomizationSpec $global:OS_SPEC_NAME | Get-OSCustomizationNicMapping | Set-OSCustomizationNicMapping -IpMode UseStaticIp -IpAddress $global:IP_ADDR -SubnetMask $global:SNM -DefaultGateway $global:DFG -Dns $global:DNS1,$global:DNS2
+    New-VM -Name $global:SERVER_NAME -ResourcePool $global:RESOURCE_POOL -Datastore $global:PRIMARY_DATASTORE -OSCustomizationSpec $global:OS_SPEC_NAME -Template $global:TEMPLATE 
+    Get-VM -Name $global:SERVER_NAME | Get-NetworkAdapter | Set-NetworkAdapter -NetworkName $global:PORTGROUP -Confirm:$false
+    }elseif($global:OS_TYPE -eq "LINUX"){
+    Set-OSCustomizationSpec -OSCustomizationSpec $global:OS_SPEC_NAME -DnsServer $global:DNS_SERVER -DnsSuffix $global:DNS_SUFFIX
+    Set-OSCustomizationSpec -OSCustomizationSpec $global:OS_SPEC_NAME | Get-OSCustomizationNicMapping | Set-OSCustomizationNicMapping -IpMode UseStaticIp -IpAddress $global:IP_ADDR -SubnetMask $global:SNM -DefaultGateway $global:DFG 
+    New-VM -Name $global:SERVER_NAME -ResourcePool $global:RESOURCE_POOL -Datastore $global:PRIMARY_DATASTORE -OSCustomizationSpec $global:OS_SPEC_NAME -Template $global:TEMPLATE 
+    Get-VM -Name $global:SERVER_NAME | Get-NetworkAdapter | Set-NetworkAdapter -NetworkName $global:PORTGROUP -Confirm:$false    
+    }
+    
+    $global:TARGET_VM = Get-VM -Name $global:SERVER_NAME
+
+    if($global:OS_HARD_DISK_RESIZE = "YES"){
+        $SIZE_GB = $global:OS_HARD_DISK_SIZE
+        $global:OS_HARD_DISK_OBJ = Get-HardDisk -VM $global:SERVER_NAME
+        Set-HardDisk -HardDisk $global:OS_HARD_DISK_OBJ -capacityGB $global:OS_HARD_DISK_SIZE -Confirm:$false
+    }
+
+    if($global:SECOND_DISK = "YES"){
+        $global:TARGET_VM | New-HardDisk -CapacityGB $global:SECOND_DISK_SIZE -Datastore $global:SECONDARY_DATASTORE
+    }
+    
+    Set-VM -VM $global:SERVER_NAME -MemoryGB "$global:SERVER_MEMORY" -Confirm:$false
+    Set-VM -VM $global:SERVER_NAME -NumCPU "$global:CPU_COUNT" -Confirm:$false
+    Start-VM -VM $global:SERVER_NAME
+}
+
+function SendReport{
+    $REPORT_CONTENT = $REPORT_CONTENT+"The build started at: $global:START_TIME $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"The build started by: $global:$global:BUILDER_NAME $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"Resource pool selected: $global:RESOURCE_POOL $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"Template Used: $global:TEMPLATE $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+" Customization Spec used: $global:OS_SPEC_NAME $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"Server name: $global:SERVER_NAME $global:NEW_LINE" 
+    $REPORT_CONTENT = $REPORT_CONTENT+"Memory allocated: $global:SERVER_MEMORY $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"CPUs allocated: $global:CPU_COUNT $global:NEW_LINE"    
+    $REPORT_CONTENT = $REPORT_CONTENT+"Server portgroup: $global:PORTGROUP  $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"IP Address: $global:IP_ADDR $global:NEW_LINE" 
+    $REPORT_CONTENT = $REPORT_CONTENT+"Subnet Mask: $global:SNM  $global:NEW_LINE" 
+    $REPORT_CONTENT = $REPORT_CONTENT+"Default gateway: $global:DFG $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"Primary DNS server: $global:DNS1 $global:NEW_LINE" 
+    $REPORT_CONTENT = $REPORT_CONTENT+"Secondary DNS server: $global:DNS2 $global:NEW_LINE" 
+    $REPORT_CONTENT = $REPORT_CONTENT+"Primary storage size will be: $global:OS_HARD_DISK_SIZE $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"Primary storage will be placed on: $global:PRIMARY_DATASTORE $global:NEW_LINE"
+    $REPORT_CONTENT = $REPORT_CONTENT+"Second disk requested: $global:SECOND_DISK $global:NEW_LINE"
+
+    if($global:SECOND_DISK -eq "YES"){
+        $REPORT_CONTENT = $REPORT_CONTENT+"The secondary storage will be placed on: $global:SECONDARY_DATASTORE $global:NEW_LINE"
+        $REPORT_CONTENT = $REPORT_CONTENT+"The size of the second hard drive will be: $global:SECOND_DISK_SIZE Gb $global:NEW_LINE"
+    }
+    
+    $global:END_TIME = Get-Date
+    $REPORT_CONTENT = $REPORT_CONTENT+"The build completed at: $global:END_TIME $global:NEW_LINE"
+  
+    Write-Host "********** E-Mailing Build Report **********"
+    Write-Host ""
+    $SUBJECT = "Build report for server " +  $global:SERVER_NAME
+    Send-MailMessage -To "saiello@onlinetech.com" -Cc $global:BUILDER_EMAIL -From "build_report@onlinetech.com" -Subject $SUBJECT -SmtpServer $global:SMTP_RELAY -Body $REPORT_CONTENT
+}
+
+############################### START MAIN PROGRAM ############################### 
+
+Write-Host "Welcome to Steve's deployment script"
+Write-Host "Version 1.1.0"
+Write-Host "Date Updated 06/23/2013"
+Write-Host ""
+
+UserInfo
+ClientInfo
+GeneralSettings
+ConfigureNIC
+ConfigureStorage
+VerifyResults
+
+if($global:VERIFY_RESULTS -eq "Y" -or $global:VERIFY_RESULTS -eq "y"){
+    ExecuteBuild
+    SendReport
+}else{
+    Write-Host "You have chosen to terminate the build"
+}
